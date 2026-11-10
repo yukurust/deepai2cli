@@ -9,7 +9,7 @@
 #
 # 使い方:
 #   deepai-ready && opencode    # 前段を保証してから自分で起動する
-#   deepai-ready && pi          # pi は deepai-ready 無しでも起動可能(内部で待つ)
+#   deepai-ready && pi          # pi も同じ前段が必要(自分では DeepAI Code を起動しません)
 set -eu
 
 DEEPAI_HOME="${T3CODE_HOME:-$HOME/.deepai-code}"

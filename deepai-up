@@ -9,7 +9,7 @@
 #   deepai-up            起動済みなら即終了。未起動ならヘッドレス起動して準備を待つ
 #   deepai-up --status   状態だけ確認して終了(ready なら 0 / 未起動なら 1)
 #
-# deepai-ready / pi / deepai-pi からも呼ばれる。
+# deepai-ready から呼ばれる(単独でも実行可)。
 set -eu
 
 APP_HOME="${T3CODE_HOME:-$HOME/.deepai-code}"

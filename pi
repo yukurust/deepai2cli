@@ -7,6 +7,8 @@
 #     実行ごとに独立した新規セッション(--session-id で既存セッションを継続可)
 #     ツール read,bash,edit,write,grep,find,ls
 # - DeepAI Code のログイン状態(保存済みアカウント)をそのまま利用します。
+# - 起動・接続の準備は deepai-ready に一本化(pi では起動・待機しません。未準備なら
+#   その旨を知らせて終了します)。
 # - Orca のエージェント起動(`orca agent launch --agent pi`)は PATH 上の `pi`
 #   を探して起動する(detectCmd: pi、プロンプトは argv で渡る)ので、
 #   このスクリプトは `pi` という名前でインストールしてください。
@@ -34,21 +36,16 @@ main() {
     esac
   done
 
-  # ローカルプロキシが未起動なら DeepAI Code をバックグラウンド起動して待つ。
+  # 準備(DeepAI Code の起動・接続)は deepai-ready に一本化。pi では起動・待機しない。
   PROXY_URL="$(python3 -c 'import json, sys
 try:
     print(json.load(open(sys.argv[1]))["providers"]["deepai"].get("baseUrl", ""))
 except Exception:
     pass' "$PI_CONFIG/models.json" 2>/dev/null || true)"
-  if [ -n "$PROXY_URL" ] && ! curl -s -o /dev/null --max-time 2 "$PROXY_URL/"; then
-    DEEPAI_UP="$SCRIPT_DIR/deepai-up"
-    [ -x "$DEEPAI_UP" ] || DEEPAI_UP="$(command -v deepai-up || true)"
-    if [ -z "$DEEPAI_UP" ]; then
-      echo "pi: ローカルプロキシ($PROXY_URL)に接続できず、deepai-up も見つかりません。" >&2
-      echo 'pi: DeepAI Code アプリを起動してください。' >&2
-      exit 1
-    fi
-    "$DEEPAI_UP" >&2 || exit 1
+  if [ -z "$PROXY_URL" ] || ! curl -s -o /dev/null --max-time 2 "$PROXY_URL/"; then
+    echo "pi: DeepAI の準備が整っていません(プロキシ ${PROXY_URL:-未設定} が応答しません)。" >&2
+    echo 'pi: 先に deepai-ready を実行してください。' >&2
+    exit 1
   fi
 
   # 呼び出し側の指定を確認(無いときだけ既定を補う)。
@@ -100,16 +97,5 @@ except Exception:
   export T3_DEEPAI_THREAD_ID="${T3_DEEPAI_THREAD_ID:-$SESSION_VALUE}"
   exec "$HELPER" "$PI_CLI" "$@"
 }
-
-# シンボリックリンクを解決して自分のディレクトリを求める(deepai-up 探索用)。
-SELF=$0
-while [ -L "$SELF" ]; do
-  TARGET=$(readlink "$SELF")
-  case "$TARGET" in
-    /*) SELF="$TARGET" ;;
-    *) SELF="$(dirname "$SELF")/$TARGET" ;;
-  esac
-done
-SCRIPT_DIR=$(cd "$(dirname "$SELF")" && pwd)
 
 main "$@"
