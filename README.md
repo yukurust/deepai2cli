@@ -1,99 +1,101 @@
-# DeepAI Code CLI tools
+# DeepAI Code CLI Tools
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-DeepAI Code のログイン状態・モデル設定(保存済みアカウント)をそのまま利用して、ターミナルから DeepAI のモデルと Pi coding agent を使うためのツール一式です。APIキーの再入力は不要です。
+English | [日本語](README.ja.md) | [中文](README.zh.md)
 
-## できること
+Use DeepAI's models and the built-in **Pi coding agent** right from your terminal and [opencode](https://opencode.ai) — reusing your existing DeepAI Code login and saved account settings. **No API key re-entry required.**
 
-- **ターミナルから DeepAI Code 内蔵の Pi coding agent を実行**(`deepai-pi`、対話 / 非対話)
-- **opencode のモデルとして DeepAI のモデルを選択して実行**(モデル一覧は DeepAI Code の設定から自動生成)
-- opencode の `/deepai` コマンドで DeepAI CLI(Pi)を 1 回実行
-- 会話ごとに独立した Pi セッション ID を作成
+## What you get
 
-## 使い方
+- **Run DeepAI Code's built-in Pi coding agent from the terminal** (`deepai-pi`, interactive / one-shot)
+- **Use DeepAI models inside opencode** (the model list is generated automatically from DeepAI Code's settings)
+- A `/deepai` command in opencode to run the DeepAI CLI (Pi) once
+- A fresh, independent Pi session ID per conversation
 
-### ターミナルから DeepAI CLI(Pi)を実行する
+## Usage
+
+### Run the DeepAI CLI (Pi) from the terminal
 
 ```sh
-deepai-pi                                            # 対話セッションを開始
-deepai-pi "このプロジェクトの構成を調べて"            # 最初の指示を付けて開始
-deepai-pi --print -- "一文で要約して"                 # 非対話で 1 回実行
-deepai-pi --model glm-5.3-flash --print -- "…"       # モデル指定
+deepai-pi                                            # start an interactive session
+deepai-pi "Investigate this project's structure"     # start with an initial prompt
+deepai-pi --print -- "Summarize in one sentence"     # one-shot, non-interactive
+deepai-pi --model glm-5.3-flash --print -- "…"       # pick a specific model
 ```
 
-| オプション | 説明 |
+| Option | Description |
 | --- | --- |
-| `-p, --print` | 非対話モード。プロンプトを処理して終了する |
-| `-m, --model <id>` | DeepAI のモデル ID(既定: `mimo-2.6-pro`) |
-| `--session-id <id>` | セッション ID を指定する(既定: 実行ごとに新規発行) |
-| `-h, --help` | ヘルプを表示 |
+| `-p, --print` | Non-interactive mode. Processes the prompt and exits |
+| `-m, --model <id>` | DeepAI model ID (default: `mimo-2.6-pro`) |
+| `--session-id <id>` | Set the session ID (default: a new one per run) |
+| `-h, --help` | Show help |
 
-### opencode 内で DeepAI のモデルを選択する
+### Use DeepAI models inside opencode
 
-opencode のモデル切替(`/models`)に DeepAI のモデルが出ます。
+DeepAI models show up in opencode's model picker (`/models`).
 
-| 操作 | 方法 |
+| How | What to do |
 | --- | --- |
-| 対話中に切替 | `/models` を開いて `deepai/…` を選択 |
-| 起動時に指定 | `opencode run --model deepai/glm-5.3-flash "…"` |
-| 一覧確認 | `opencode models` |
+| Switch mid-session | Open `/models` and pick `deepai/…` |
+| Choose at launch | `opencode run --model deepai/glm-5.3-flash "…"` |
+| List models | `opencode models` |
 
-モデル一覧は DeepAI Code の設定(`models.json`)から自動で取り込まれ、DeepAI Code にモデルが追加されると `opencode-deepai-launch` の再実行で増えます。既定モデルは `deepai/mimo-2.6-pro` です。モデル名は DeepAI Code 本体の表示に合わせます(例: `deepseek-v4.1-flash` は「DeepSeek V4.1 Flash 1017」)。モデル単位で Responses API を使うもの(`gpt-6-astra`)は、そのモデルだけ provider package を上書きします。
+The model list is imported automatically from DeepAI Code's settings (`models.json`). When DeepAI Code adds a model, re-running `opencode-deepai-launch` picks it up. The default model is `deepai/mimo-2.6-pro`. Model names match what the DeepAI Code app displays (e.g. `deepseek-v4.1-flash` shows as "DeepSeek V4.1 Flash 1017"). Models that use the Responses API per model (`gpt-6-astra`) get their provider package overridden individually.
 
-主なモデル: `mimo-2.6-pro`(既定) / `claude-opus-5-5` / `claude-fable-5-2` / `glm-5.3-flash` / `deepseek-v4.1-flash` / `qwen-3.8-flash` / `qwen-3.8-max-prime` / `minimax-m3` / `gemini-4-argon` / `gpt-6.1-sol` / `kimi-k3` など。
+Main models: `mimo-2.6-pro` (default) / `claude-opus-5-5` / `claude-fable-5-2` / `glm-5.3-flash` / `deepseek-v4.1-flash` / `qwen-3.8-flash` / `qwen-3.8-max-prime` / `minimax-m3` / `gemini-4-argon` / `gpt-6.1-sol` / `kimi-k3`, and more.
 
-モデル一覧を DeepAI だけに絞りたい場合は、`~/.config/opencode/opencode.jsonc` に次を追記します(他のプロバイダのモデルが一覧に出なくなり、指定しても `Model unavailable` になります)。
+To show only DeepAI models in the picker, add this to `~/.config/opencode/opencode.jsonc` (other providers' models will disappear from the list, and specifying them will fail with `Model unavailable`):
 
 ```json
 { "enabled_providers": ["deepai"] }
 ```
 
-### DeepAI CLI(Pi)を opencode から実行する
+### Run the DeepAI CLI (Pi) from within opencode
 
 ```sh
-/deepai このプロジェクトの構成を調べて改善案を出して   # opencode のコマンド
-!deepai-pi --print -- "一文で要約して"                # opencode のシェル実行(モデル不使用)
+/deepai Investigate this project's structure and suggest improvements   # opencode command
+!deepai-pi --print -- "Summarize in one sentence"                       # opencode shell (no model used)
 ```
 
-`/deepai` は opencode のセッションモデルを経由して CLI を起動します。モデルを実行したくない場合は `!deepai-pi` を使ってください。
+`/deepai` launches the CLI through opencode's session model. If you don't want to consume model tokens, use `!deepai-pi` instead.
 
-### opencode の設定を DeepAI Code に追従させる
+### Keep opencode's config in sync with DeepAI Code
 
 ```sh
-opencode-deepai-launch    # 起動と同時に、最新のモデル一覧・認証情報で設定を更新
+opencode-deepai-launch    # updates the model list and credentials at startup
 ```
 
-DeepAI Code のアカウントやモデル設定(`models.json`)を更新したときは、このコマンドを一度実行すると `~/.config/opencode/opencode.jsonc` の DeepAI 設定(モデル一覧・認証情報)に反映されます。
+When you update your DeepAI Code account or model settings (`models.json`), run this once to sync the DeepAI section of `~/.config/opencode/opencode.jsonc` (model list and credentials).
 
-## セットアップ(再現手順)
+## Setup
 
 ```sh
 mkdir -p ~/.local/bin ~/.config/opencode/command
 ln -sf "$PWD/deepai-pi" ~/.local/bin/deepai-pi
 ln -sf "$PWD/opencode/command/deepai.md" ~/.config/opencode/command/deepai.md
-opencode-deepai-launch   # ~/.config/opencode/opencode.jsonc に DeepAI プロバイダを追加
+opencode-deepai-launch   # adds the DeepAI provider to ~/.config/opencode/opencode.jsonc
 ```
 
-`~/.local/bin` を PATH に含めておいてください(`export PATH="$HOME/.local/bin:$PATH"`)。
+Make sure `~/.local/bin` is on your `PATH` (`export PATH="$HOME/.local/bin:$PATH"`).
 
-認証情報は `~/.config/opencode/opencode.jsonc` に保持し、ファイルの権限は 600 にしています。`opencode-deepai-launch` は DeepAI Code の設定からモデル一覧と認証を取り込み、既定モデルを `deepai/mimo-2.6-pro` にして起動します。
+Credentials are stored only in `~/.config/opencode/opencode.jsonc`, with file permissions set to 600. `opencode-deepai-launch` imports the model list and credentials from DeepAI Code's settings, sets the default model to `deepai/mimo-2.6-pro`, and launches opencode.
 
-## 前提
+## Requirements
 
-- macOS(DeepAI Code アプリのパスを前提にしています)
-- [opencode](https://opencode.ai) がインストール済みであること
-- DeepAI Code アプリが起動済みで、サインインしていること(応答は DeepAI Code のローカルプロキシ経由です)
-- モデルが選択できない場合は `~/.deepai-code/userdata/deepai/pi/deepai/models.json` と `~/.config/opencode/opencode.jsonc` を確認してください
+- macOS (the DeepAI Code app path is assumed)
+- [opencode](https://opencode.ai) installed
+- DeepAI Code app running and signed in (responses go through DeepAI Code's local proxy)
+- If models don't show up, check `~/.deepai-code/userdata/deepai/pi/deepai/models.json` and `~/.config/opencode/opencode.jsonc`
 
-## リポジトリ構成
+## Repository layout
 
-| パス | 役割 |
+| Path | Role |
 | --- | --- |
-| `deepai-pi` | DeepAI Code 内蔵 Pi CLI を実行するラッパー(対話 / 非対話) |
-| `opencode-deepai-launch` | DeepAI Code の設定から opencode の設定を生成して起動する |
-| `opencode/command/deepai.md` | opencode の `/deepai` コマンド定義 |
+| `deepai-pi` | Wrapper that runs the Pi CLI built into DeepAI Code (interactive / one-shot) |
+| `opencode-deepai-launch` | Generates opencode's config from DeepAI Code's settings and launches it |
+| `opencode/command/deepai.md` | opencode `/deepai` command definition |
 
-## ライセンス
+## License
 
 [MIT](LICENSE)
