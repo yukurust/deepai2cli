@@ -22,7 +22,7 @@ curl -fsSL "$URL" | sh -s -- --uninstall     # 配置したファイルを削除
 curl -fsSL "$URL" -o install.sh && sh install.sh   # 中身を確認してから実行
 ```
 
-更新は curl コマンドの再実行です。実行内容を固定したい場合は URL の `main` をタグ/コミットに置き換えてください。インストーラは前提チェックを実施し、**DeepAI Code アプリが未導入の場合はその旨を明確に案内します**(`pi` と DeepAI モデルの利用に必要。導入・サインイン後に `opencode-deepai-launch --prepare` を実行してください)。既に別の `pi` が PATH にある場合はその `pi` を残したまま pi 系(`pi` / `deepai-pi` / `/deepai` コマンド)だけをスキップするので、**opencode のみの利用では既存の pi と衝突せずにインストールできます**。`~/.local/bin` を PATH に含めておいてください(`export PATH="$HOME/.local/bin:$PATH"`)。
+更新は curl コマンドの再実行です。実行内容を固定したい場合は URL の `main` をタグ/コミットに置き換えてください。インストーラは前提チェックを実施し、**DeepAI Code アプリが未導入の場合はその旨を明確に案内します**(`pi` と DeepAI モデルの利用に必要。導入・サインイン後に `deepai-ready` を実行してください)。既に別の `pi` が PATH にある場合はその `pi` を残したまま pi 系(`pi` / `deepai-pi` / `/deepai` コマンド)だけをスキップするので、**opencode のみの利用では既存の pi と衝突せずにインストールできます**。`~/.local/bin` を PATH に含めておいてください(`export PATH="$HOME/.local/bin:$PATH"`)。
 
 ## 使い方
 
@@ -52,7 +52,7 @@ opencode のモデル切替(`/models`)に DeepAI のモデルが出ます。
 | 起動時に指定 | `opencode run --model deepai/glm-5.3-flash "…"` |
 | 一覧確認 | `opencode models` |
 
-モデル一覧は DeepAI Code の設定(`models.json`)から自動で取り込まれ、DeepAI Code にモデルが追加されると `opencode-deepai-launch` の再実行で増えます。既定モデルは `deepai/mimo-2.6-pro` です。モデル名は DeepAI Code 本体の表示に合わせます(例: `deepseek-v4.1-flash` は「DeepSeek V4.1 Flash 1017」)。モデル単位で Responses API を使うもの(`gpt-6-astra`)は、そのモデルだけ provider package を上書きします。
+モデル一覧は DeepAI Code の設定(`models.json`)から自動で取り込まれ、DeepAI Code にモデルが追加されると `deepai-ready` の再実行で増えます。既定モデルは `deepai/mimo-2.6-pro` です。モデル名は DeepAI Code 本体の表示に合わせます(例: `deepseek-v4.1-flash` は「DeepSeek V4.1 Flash 1017」)。モデル単位で Responses API を使うもの(`gpt-6-astra`)は、そのモデルだけ provider package を上書きします。
 
 主なモデル: `mimo-2.6-pro`(既定) / `claude-opus-5-5` / `claude-fable-5-2` / `glm-5.3-flash` / `deepseek-v4.1-flash` / `qwen-3.8-flash` / `qwen-3.8-max-prime` / `minimax-m3` / `gemini-4-argon` / `gpt-6.1-sol` / `kimi-k3` など。
 
@@ -111,27 +111,26 @@ deepai-up --status     # 状態だけ確認(ready なら exit 0)
 
 DeepAI Code のローカルプロキシは **アプリの起動ごとにポートと API キーが変わります**。`deepai-up` は `models.json` を毎回読み直して現行ポートへ接続を試みるため、ローテーション後も正しく追従します。
 
-### opencode の設定を DeepAI Code に追従させる
+### opencode / pi を開く前に準備する
 
 ```sh
-opencode-deepai-launch --prepare   # 設定だけ更新して終了(以降は素の `opencode` が使える)
-opencode-deepai-launch             # 設定を更新して opencode を起動
+deepai-ready    # DeepAI Code の起動・API プロキシ待ち・opencode 設定の同期まで行う
 ```
 
-DeepAI Code のアカウントやモデル設定(`models.json`)を更新したとき、あるいは **DeepAI Code を再起動したときは、このコマンドを一度実行**すると `~/.config/opencode/opencode.jsonc` の DeepAI 設定(モデル一覧・認証情報)に反映されます。`--prepare` は DeepAI Code が未起動ならバックグラウンド起動まで行い、opencode は起動しません。**この後は素の `opencode` をいつでも直接起動できます**。ファイル内の他の設定・他プロバイダ・既定モデルはそのまま残ります(JSONC のコメントは保持されません)。バックアップはツール導入前のファイル1枚を `opencode.jsonc.bak` として保存するだけで、上書きも増殖もしません。認証情報は `~/.config/opencode/opencode.jsonc`(権限 600)のみに保持されます。
+`opencode` を開く前に実行してください(`pi` は任意。`pi` は内部でプロキシを待ちます)。**opencode も pi も起動しません**: 実行後は素の `opencode` をいつでも直接起動できます。DeepAI Code のアカウントやモデル設定(`models.json`)を更新したとき、あるいは **DeepAI Code を再起動したときは、このコマンドを一度実行**すると `~/.config/opencode/opencode.jsonc` の DeepAI 設定(モデル一覧・認証情報)に反映されます。ファイル内の他の設定・他プロバイダ・既定モデルはそのまま残ります(JSONC のコメントは保持されません)。バックアップはツール導入前のファイル1枚を `opencode.jsonc.bak` として保存するだけで、上書きも増殖もしません。認証情報は `~/.config/opencode/opencode.jsonc`(権限 600)のみに保持されます。起動・待機は `deepai-up` に委譲しているので、両者が干渉することはありません。
 
 #### Orca の自動化と組み合わせる
 
-Orca で opencode を起動する直前に `opencode-deepai-launch --prepare` を実行する設定にすると、DeepAI Code 未起動・再起動後も使える状態になってから opencode が立ち上がります。
+Orca で opencode を起動する直前に `deepai-ready` を実行する設定にすると、DeepAI Code 未起動・再起動後も使える状態になってから opencode が立ち上がります。
 
 ```sh
-opencode-deepai-launch --prepare && exec opencode "$@"   # 例: ラッパーの中身
+deepai-ready && exec opencode "$@"   # 例: ラッパーの中身
 ```
 
 ### モデル一覧が古い・モデルが選択できないとき
 
 1. `deepai-up --status` でプロキシが生きているか確認(未起動なら `deepai-up`)
-2. `opencode-deepai-launch --prepare` で設定を再同期
+2. `deepai-ready` で設定を再同期
 3. それでもダメなら `~/.deepai-code/userdata/deepai/pi/deepai/models.json` と `~/.config/opencode/opencode.jsonc` の `baseUrl` が一致しているか確認
 
 ## できること
@@ -139,7 +138,7 @@ opencode-deepai-launch --prepare && exec opencode "$@"   # 例: ラッパーの�
 - **ターミナルから DeepAI Code 内蔵の Pi coding agent を実行**(`deepai-pi`、対話 / 非対話)
 - **opencode のモデルとして DeepAI のモデルを選択して実行**(モデル一覧は DeepAI Code の設定から自動生成)
 - **DeepAI Code をバックグラウンド(非表示)で起動**(`deepai-up`、未起動なら待機付きで自動起動)
-- **opencode の設定だけを更新**(`opencode-deepai-launch --prepare`、以降は素の `opencode` が使える)
+- **opencode / pi を開く前の準備**(`deepai-ready`、何も起動せずに準備だけ完了)
 - opencode の `/deepai` コマンドで DeepAI CLI(Pi)を 1 回実行
 - 会話ごとに独立した Pi セッション ID を作成
 
@@ -147,8 +146,8 @@ opencode-deepai-launch --prepare && exec opencode "$@"   # 例: ラッパーの�
 
 - macOS(DeepAI Code アプリのパスを前提。標準の `curl`・`python3` を使用)
 - [opencode](https://opencode.ai) がインストール済みであること
-- DeepAI Code アプリにサインイン済みであること(応答は DeepAI Code のローカルプロキシ経由。未起動なら `deepai-up` / `opencode-deepai-launch` がバックグラウンドで起動を試みます)
-- 注意: DeepAI Code を再起動するとローカルプロキシのポートと API キーがローテーションされ、生成済み設定は無効になります。opencode を使う前に `opencode-deepai-launch --prepare` を実行してください
+- DeepAI Code アプリにサインイン済みであること(応答は DeepAI Code のローカルプロキシ経由。未起動なら `deepai-up` / `deepai-ready` がバックグラウンドで起動を試みます)
+- 注意: DeepAI Code を再起動するとローカルプロキシのポートと API キーがローテーションされ、生成済み設定は無効になります。opencode を使う前に `deepai-ready` を実行してください
 - モデルが選択できない場合は「モデル一覧が古い・モデルが選択できないとき」を参照してください
 
 ## リポジトリ構成
@@ -159,7 +158,7 @@ opencode-deepai-launch --prepare && exec opencode "$@"   # 例: ラッパーの�
 | `deepai-pi` | `pi` のフレンドリーなラッパー(対話 / 非対話) |
 | `deepai-up` | DeepAI Code をバックグラウンド起動し、ローカルプロキシの応答を待つ |
 | `deepai-opencode` | 設定を同期してから opencode を起動 |
-| `opencode-deepai-launch` | DeepAI Code の設定から opencode の設定を生成して起動(`--prepare` で設定更新のみ) |
+| `deepai-ready` | opencode / pi を開く前の準備(DeepAI Code の起動・接続・opencode 設定の同期。起動はしない) |
 | `install.sh` | 冪等なインストーラ(コマンドを `~/.local/bin` にダウンロード。リポジトリ不要) |
 | `opencode/command/deepai.md` | opencode の `/deepai` コマンド定義 |
 

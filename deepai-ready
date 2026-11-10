@@ -1,0 +1,148 @@
+#!/bin/sh
+# deepai-ready: opencode / pi を開く前に実行する準備スクリプト。
+#
+# 1 回実行するだけで以下が確約されます(どちらも起動しません):
+#   - DeepAI Code が未起動ならバックグラウンドで起動し、ローカルプロキシの応答を待つ
+#     (deepai-up に委譲。何度実行しても安全な冪等な処理で、deepai-up と干渉しません)
+#   - opencode の設定(~/.config/opencode/opencode.jsonc の providers.deepai)を
+#     DeepAI Code の最新モデル一覧・認証情報に同期
+#
+# 使い方:
+#   deepai-ready && opencode    # 前段を保証してから自分で起動する
+#   deepai-ready && pi          # pi は deepai-ready 無しでも起動可能(内部で待つ)
+set -eu
+
+DEEPAI_HOME="${T3CODE_HOME:-$HOME/.deepai-code}"
+PI_CONFIG="${PI_CODING_AGENT_DIR:-$DEEPAI_HOME/userdata/deepai/pi/deepai}"
+MODELS_FILE="$PI_CONFIG/models.json"
+
+# シンボリックリンクを解決して自分のディレクトリを求める(deepai-up 探索用)。
+SELF=$0
+while [ -L "$SELF" ]; do
+  TARGET=$(readlink "$SELF")
+  case "$TARGET" in
+    /*) SELF="$TARGET" ;;
+    *) SELF="$(dirname "$SELF")/$TARGET" ;;
+  esac
+done
+SCRIPT_DIR=$(cd "$(dirname "$SELF")" && pwd)
+
+if [ ! -r "$MODELS_FILE" ]; then
+  echo "deepai-ready: DeepAI Code のモデル設定が見つかりません: $MODELS_FILE" >&2
+  echo 'deepai-ready: DeepAI Code を一度起動してサインインしてください。' >&2
+  exit 1
+fi
+
+# 1) DeepAI Code の起動とプロキシ準備(起動・待機は deepai-up に委譲)。
+DEEPAI_UP="$SCRIPT_DIR/deepai-up"
+[ -x "$DEEPAI_UP" ] || DEEPAI_UP="$(command -v deepai-up || true)"
+if [ -z "$DEEPAI_UP" ]; then
+  echo 'deepai-ready: deepai-up が見つかりません。README のインストールを実行してください。' >&2
+  exit 1
+fi
+"$DEEPAI_UP" >&2
+
+# 2) opencode の設定を同期する(起動はしない)。
+python3 - "$MODELS_FILE" "$HOME/.config/opencode/opencode.jsonc" "$HOME/.config/opencode/opencode.json" <<'PY'
+import json, os, re, sys
+source, *user_configs = sys.argv[1:]
+
+def parse_jsonc(text):
+    # Remove JSONC comments while preserving quoted strings and their escapes.
+    out, i, quoted, escaped = [], 0, False, False
+    while i < len(text):
+        ch = text[i]
+        nxt = text[i + 1] if i + 1 < len(text) else ''
+        if quoted:
+            out.append(ch)
+            if escaped:
+                escaped = False
+            elif ch == '\\':
+                escaped = True
+            elif ch == '"':
+                quoted = False
+            i += 1
+        elif ch == '"':
+            quoted = True
+            out.append(ch)
+            i += 1
+        elif ch == '/' and nxt == '/':
+            i += 2
+            while i < len(text) and text[i] not in '\r\n':
+                i += 1
+        elif ch == '/' and nxt == '*':
+            i += 2
+            while i + 1 < len(text) and text[i:i + 2] != '*/':
+                i += 1
+            i = min(len(text), i + 2)
+        else:
+            out.append(ch)
+            i += 1
+    return json.loads(re.sub(r',\s*([}\]])', r'\1', ''.join(out)))
+
+data = json.load(open(source, encoding='utf-8'))
+prov = data.get('providers', {}).get('deepai', {})
+models = prov.get('models', [])
+if not models:
+    raise SystemExit('deepai-ready: DeepAI Code にモデルがありません。サインイン状態を確認してください。')
+if not prov.get('apiKey') or not prov.get('baseUrl'):
+    raise SystemExit('deepai-ready: DeepAI Code のログイン情報がありません。サインインしてください。')
+
+# DeepAI Code 本体の表示名・提供 API に合わせるための規則。
+def display_name(model):
+    if model['id'] == 'deepseek-v4.1-flash' and model.get('name') == 'DeepSeek V4.1 Flash':
+        return 'DeepSeek V4.1 Flash 1017'
+    return model.get('name', model['id'])
+
+config_models = {}
+for model in models:
+    if model['id'] == 'gpt-oss-120b':
+        continue
+    entry = {
+        'name': display_name(model),
+        'modelID': model['id'],
+        'limit': {
+            'context': model.get('contextWindow', 65536),
+            'output': model.get('maxTokens', 8192),
+        },
+        'capabilities': {
+            'tools': True,
+            'input': model.get('input', ['text']),
+            'output': ['text'],
+        },
+    }
+    if model.get('reasoning'):
+        entry['variants'] = [
+            {'id': 'low', 'settings': {'reasoningEffort': 'low'}},
+            {'id': 'medium', 'settings': {'reasoningEffort': 'medium'}},
+            {'id': 'high', 'settings': {'reasoningEffort': 'high'}},
+        ]
+    # DeepAI がモデル単位で Responses API を指定する場合の上書き
+    if model.get('api') == 'openai-responses':
+        entry['package'] = 'aisdk:@ai-sdk/openai-compatible/responses'
+    config_models[model['id']] = entry
+
+deepai_provider = {
+    'name': 'DeepAI Code',
+    'package': 'aisdk:@ai-sdk/openai-compatible',
+    'settings': {'baseURL': prov['baseUrl'], 'apiKey': prov['apiKey']},
+    'models': config_models,
+}
+
+# opencode のグローバル設定の DeepAI プロバイダだけを更新する。
+# それ以外(他のキー・プロバイダ・既定モデル)は触れない。
+sync_path = next((p for p in user_configs if os.path.isfile(p)), user_configs[0])
+user_config = parse_jsonc(open(sync_path, encoding='utf-8').read()) if os.path.isfile(sync_path) else {}
+# 初回の変更前に 1 度だけバックアップを取る(増殖しない)。
+if os.path.isfile(sync_path) and not os.path.isfile(sync_path + '.bak'):
+    import shutil
+    shutil.copy2(sync_path, sync_path + '.bak')
+user_config.setdefault('providers', {})['deepai'] = deepai_provider
+with open(sync_path, 'w', encoding='utf-8') as f:
+    json.dump(user_config, f, ensure_ascii=False, indent=2)
+    f.write('\n')
+os.chmod(sync_path, 0o600)
+print(f'deepai-ready: {sync_path} の providers.deepai を更新しました。')
+PY
+
+echo 'deepai-ready: 準備完了。opencode / pi をそのまま起動できます。'

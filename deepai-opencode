@@ -14,14 +14,14 @@ while [ -L "$SELF" ]; do
 done
 SCRIPT_DIR=$(cd "$(dirname "$SELF")" && pwd)
 
-LAUNCH="$SCRIPT_DIR/opencode-deepai-launch"
+LAUNCH="$SCRIPT_DIR/deepai-ready"
 if [ ! -x "$LAUNCH" ]; then
-  LAUNCH="$(command -v opencode-deepai-launch || true)"
+  LAUNCH="$(command -v deepai-ready || true)"
 fi
 if [ -z "$LAUNCH" ]; then
-  echo 'deepai-opencode: opencode-deepai-launch が見つかりません。README のセットアップを実行してください。' >&2
+  echo 'deepai-opencode: deepai-ready が見つかりません。README のインストールを実行してください。' >&2
   exit 1
 fi
 
-"$LAUNCH" --prepare >&2
+"$LAUNCH" >&2
 exec opencode "$@"

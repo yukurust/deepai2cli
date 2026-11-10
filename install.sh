@@ -27,8 +27,8 @@
 #   pi                     pi を独立セッションで起動(Orca の --agent pi からも使われる)
 #   deepai-pi              pi のフレンドリーなラッパー
 #   deepai-up              DeepAI Code をバックグラウンド起動して準備待ち
-#   deepai-opencode        設定を同期して opencode を起動
-#   opencode-deepai-launch opencode の設定生成(--prepare で更新のみ)
+#   deepai-ready           opencode / pi を開く前の準備(起動・接続・設定同期)
+#   deepai-opencode        準備してから opencode を起動
 #
 # 前提:
 #   - macOS / DeepAI Code アプリ(サインイン済み)/ [opencode](https://opencode.ai)
@@ -37,7 +37,7 @@ set -eu
 
 BIN_DIR="$HOME/.local/bin"
 COMMAND_DIR="$HOME/.config/opencode/command"
-SCRIPTS="pi deepai-pi deepai-up deepai-opencode opencode-deepai-launch"
+SCRIPTS="pi deepai-pi deepai-up deepai-ready deepai-opencode"
 URL_BASE="${DEEPAI2CLI_URL_BASE:-https://raw.githubusercontent.com/yukurust/deepai2cli/main}"
 DEEPAI_APP="${DEEPAI_APP:-/Applications/DeepAI Code.app}"
 
@@ -72,7 +72,7 @@ esac
 # このスクリプトがリポジトリ内に置かれている場合はその場のファイルを使う
 # (開発用。ネットワーク不要)。それ以外(curl | sh 等)はダウンロードする。
 SELF_DIR=$(cd "$(dirname "$0")" 2>/dev/null && pwd) || SELF_DIR=''
-if [ -n "$SELF_DIR" ] && [ -f "$SELF_DIR/pi" ] && [ -f "$SELF_DIR/opencode-deepai-launch" ]; then
+if [ -n "$SELF_DIR" ] && [ -f "$SELF_DIR/pi" ] && [ -f "$SELF_DIR/deepai-ready" ]; then
   LOCAL_DIR="$SELF_DIR"
 else
   LOCAL_DIR=''
@@ -186,7 +186,7 @@ esac
 
 echo 'install.sh: 完了。次のステップ:'
 echo '  deepai-up --status                 # DeepAI Code のプロキシ確認(未起動なら自動起動)'
-echo '  opencode-deepai-launch --prepare   # opencode の設定を生成 / 更新'
+echo '  deepai-ready                       # opencode / pi を開く前の準備(起動・接続・設定同期)'
 if [ "$SKIP_PI" -eq 1 ]; then
   echo 'install.sh: (pi 系は既存の pi を優先してスキップしました)'
 else
@@ -197,5 +197,5 @@ if [ "$DEEPAI_MISSING" -eq 1 ]; then
   echo ''
   echo 'install.sh: ★ DeepAI Code アプリが未インストールです。'
   echo 'install.sh:   pi / DeepAI モデルの利用には DeepAI Code アプリ(サインイン済み)が必要です。'
-  echo 'install.sh:   導入してサインイン後、opencode-deepai-launch --prepare を実行してください。'
+  echo 'install.sh:   導入してサインイン後、deepai-ready を実行してください。'
 fi

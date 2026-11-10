@@ -22,7 +22,7 @@ curl -fsSL "$URL" | sh -s -- --uninstall     # remove the installed files
 curl -fsSL "$URL" -o install.sh && sh install.sh   # inspect the script before running
 ```
 
-Re-running the curl command updates the files. To lock the version, replace `main` with a tag or commit in the URL. The installer checks the prerequisites and **tells you when the DeepAI Code app is missing** (it is required for `pi` and for DeepAI models — install it and sign in, then run `opencode-deepai-launch --prepare`). When a different `pi` is already on your `PATH`, it keeps that `pi` and skips the pi-side commands (`pi` / `deepai-pi` / `/deepai`) — so an **opencode-only setup installs cleanly alongside an existing pi**. Make sure `~/.local/bin` is on your `PATH` (`export PATH="$HOME/.local/bin:$PATH"`).
+Re-running the curl command updates the files. To lock the version, replace `main` with a tag or commit in the URL. The installer checks the prerequisites and **tells you when the DeepAI Code app is missing** (it is required for `pi` and for DeepAI models — install it and sign in, then run `deepai-ready`). When a different `pi` is already on your `PATH`, it keeps that `pi` and skips the pi-side commands (`pi` / `deepai-pi` / `/deepai`) — so an **opencode-only setup installs cleanly alongside an existing pi**. Make sure `~/.local/bin` is on your `PATH` (`export PATH="$HOME/.local/bin:$PATH"`).
 
 ## Usage
 
@@ -52,7 +52,7 @@ DeepAI models show up in opencode's model picker (`/models`).
 | Choose at launch | `opencode run --model deepai/glm-5.3-flash "…"` |
 | List models | `opencode models` |
 
-The model list is imported automatically from DeepAI Code's settings (`models.json`). When DeepAI Code adds a model, re-running `opencode-deepai-launch` picks it up. The default model is `deepai/mimo-2.6-pro`. Model names match what the DeepAI Code app displays (e.g. `deepseek-v4.1-flash` shows as "DeepSeek V4.1 Flash 1017"). Models that use the Responses API per model (`gpt-6-astra`) get their provider package overridden individually.
+The model list is imported automatically from DeepAI Code's settings (`models.json`). When DeepAI Code adds a model, re-running `deepai-ready` picks it up. The default model is `deepai/mimo-2.6-pro`. Model names match what the DeepAI Code app displays (e.g. `deepseek-v4.1-flash` shows as "DeepSeek V4.1 Flash 1017"). Models that use the Responses API per model (`gpt-6-astra`) get their provider package overridden individually.
 
 Main models: `mimo-2.6-pro` (default) / `claude-opus-5-5` / `claude-fable-5-2` / `glm-5.3-flash` / `deepseek-v4.1-flash` / `qwen-3.8-flash` / `qwen-3.8-max-prime` / `minimax-m3` / `gemini-4-argon` / `gpt-6.1-sol` / `kimi-k3`, and more.
 
@@ -111,27 +111,26 @@ deepai-up --status     # check status only (exit 0 when ready)
 
 DeepAI Code's local proxy **changes its port and API key every time the app starts**. `deepai-up` re-reads `models.json` on every attempt, so it follows the rotation.
 
-### Keep opencode's config in sync with DeepAI Code
+### Prepare before opening opencode or pi
 
 ```sh
-opencode-deepai-launch --prepare   # refresh config only; plain `opencode` works afterwards
-opencode-deepai-launch             # refresh config and launch opencode
+deepai-ready    # start DeepAI Code if needed, wait for its API proxy, sync opencode's config
 ```
 
-When you update your DeepAI Code account or model settings (`models.json`), **or after restarting DeepAI Code**, run this once to sync the DeepAI section of `~/.config/opencode/opencode.jsonc` (model list and credentials). `--prepare` also starts DeepAI Code in the background when needed and exits without launching opencode — after it finishes, plain `opencode` can be used anytime. Everything else in the file (your settings, other providers, default model) is left untouched; JSONC comments are not preserved, and the sync keeps exactly one backup of the pre-tool file as `opencode.jsonc.bak` (created once, never overwritten — no backup files accumulate). Credentials live only in `~/.config/opencode/opencode.jsonc` (permissions 600).
+Run this before opening `opencode` (for `pi` it is optional — `pi` waits for the proxy on its own). **It launches nothing**: after it finishes, plain `opencode` works anytime. Run it after updating your DeepAI Code account or model settings (`models.json`), **or after restarting DeepAI Code**. Everything else in the file (your settings, other providers, default model) is left untouched; JSONC comments are not preserved, and the sync keeps exactly one backup of the pre-tool file as `opencode.jsonc.bak` (created once, never overwritten — no backup files accumulate). Credentials live only in `~/.config/opencode/opencode.jsonc` (permissions 600). It composes `deepai-up` (start + wait) instead of duplicating it, so the two never conflict.
 
 #### Pairing with Orca automations
 
-Configure Orca to run `opencode-deepai-launch --prepare` right before launching opencode, and opencode always starts with a working DeepAI provider (even right after DeepAI Code restarts):
+Configure Orca to run `deepai-ready` right before launching opencode, and opencode always starts with a working DeepAI provider (even right after DeepAI Code restarts):
 
 ```sh
-opencode-deepai-launch --prepare && exec opencode "$@"   # e.g. inside a wrapper
+deepai-ready && exec opencode "$@"   # e.g. inside a wrapper
 ```
 
 ### Troubleshooting: models missing or `Model unavailable`
 
 1. `deepai-up --status` — is the local proxy alive? (run `deepai-up` if not)
-2. `opencode-deepai-launch --prepare` — re-sync the config
+2. `deepai-ready` — re-sync the config
 3. Still broken: check that `baseUrl` matches between `~/.deepai-code/userdata/deepai/pi/deepai/models.json` and `~/.config/opencode/opencode.jsonc`
 
 ## What you get
@@ -139,7 +138,7 @@ opencode-deepai-launch --prepare && exec opencode "$@"   # e.g. inside a wrapper
 - **Run DeepAI Code's built-in Pi coding agent from the terminal** (`deepai-pi`, interactive / one-shot)
 - **Use DeepAI models inside opencode** (the model list is generated automatically from DeepAI Code's settings)
 - **Start DeepAI Code in the background** (`deepai-up`; waits for the API proxy and auto-starts the app when needed)
-- **Refresh opencode's config without launching** (`opencode-deepai-launch --prepare`; plain `opencode` works afterwards)
+- **Prepare before opening opencode or pi** (`deepai-ready`: starts DeepAI Code, waits for its proxy, syncs opencode's config — launches nothing)
 - A `/deepai` command in opencode to run the DeepAI CLI (Pi) once
 - A fresh, independent Pi session ID per conversation
 
@@ -147,8 +146,8 @@ opencode-deepai-launch --prepare && exec opencode "$@"   # e.g. inside a wrapper
 
 - macOS (the DeepAI Code app path is assumed; the built-in `curl` and `python3` are used)
 - [opencode](https://opencode.ai) installed
-- Signed in to the DeepAI Code app (responses go through its local proxy; if the app is not running, `deepai-up` / `opencode-deepai-launch` start it in the background)
-- Restarting DeepAI Code rotates the local proxy's port and API key and invalidates generated config — run `opencode-deepai-launch --prepare` before using opencode again
+- Signed in to the DeepAI Code app (responses go through its local proxy; if the app is not running, `deepai-up` / `deepai-ready` start it in the background)
+- Restarting DeepAI Code rotates the local proxy's port and API key and invalidates generated config — run `deepai-ready` before using opencode again
 - If models don't show up, see "Troubleshooting" above
 
 ## Repository layout
@@ -159,7 +158,7 @@ opencode-deepai-launch --prepare && exec opencode "$@"   # e.g. inside a wrapper
 | `deepai-pi` | Friendlier wrapper around `pi` (interactive / one-shot) |
 | `deepai-up` | Starts DeepAI Code in the background and waits for its local proxy |
 | `deepai-opencode` | Syncs config, then starts opencode |
-| `opencode-deepai-launch` | Generates opencode's config from DeepAI Code's settings and launches it (`--prepare` refreshes config only) |
+| `deepai-ready` | Pre-flight before opencode/pi: starts DeepAI Code, waits for its proxy, syncs opencode's config (launches nothing) |
 | `install.sh` | Idempotent installer (downloads the commands into `~/.local/bin`; no checkout needed) |
 | `opencode/command/deepai.md` | opencode `/deepai` command definition |
 
