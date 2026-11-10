@@ -1,7 +1,21 @@
 #!/bin/sh
 # Launch OpenCode with DeepAI Code's saved account and models.
 # DeepAI のモデルが既定となります。
+#
+# 使い方:
+#   opencode-deepai-launch              設定を更新して opencode を起動
+#   opencode-deepai-launch --prepare    設定だけ更新して終了(以降は素の opencode が使える)
+#
+# DeepAI Code が未起動の場合は deepai-up 経由でバックグラウンド起動を待つ。
 set -eu
+
+PREPARE_ONLY=0
+case "${1:-}" in
+  --prepare|--sync)
+    PREPARE_ONLY=1
+    shift
+    ;;
+esac
 
 DEEPAI_HOME="${T3CODE_HOME:-$HOME/.deepai-code}"
 PI_CONFIG="${PI_CODING_AGENT_DIR:-$DEEPAI_HOME/userdata/deepai/pi/deepai}"
@@ -9,12 +23,31 @@ MODELS_FILE="$PI_CONFIG/models.json"
 
 if [ ! -r "$MODELS_FILE" ]; then
   echo "DeepAI Code model configuration was not found: $MODELS_FILE" >&2
+  echo 'DeepAI Code を一度起動してサインインしてください。' >&2
   exit 1
 fi
 if ! command -v opencode >/dev/null 2>&1; then
   echo "OpenCode CLI is required. Install it and retry." >&2
   exit 1
 fi
+
+# DeepAI Code が未起動ならバックグラウンドで起動し、プロキシの準備を待つ。
+SELF=$0
+while [ -L "$SELF" ]; do
+  TARGET=$(readlink "$SELF")
+  case "$TARGET" in
+    /*) SELF="$TARGET" ;;
+    *) SELF="$(dirname "$SELF")/$TARGET" ;;
+  esac
+done
+SCRIPT_DIR=$(cd "$(dirname "$SELF")" && pwd)
+DEEPAI_UP="$SCRIPT_DIR/deepai-up"
+[ -x "$DEEPAI_UP" ] || DEEPAI_UP="$(command -v deepai-up || true)"
+if [ -z "$DEEPAI_UP" ]; then
+  echo 'opencode-deepai-launch: deepai-up が見つかりません。README のセットアップを実行してください。' >&2
+  exit 1
+fi
+"$DEEPAI_UP" >&2
 
 # 認証情報は設定ファイル(権限 600)でのみ保持し、argv には出さない。
 T3_DEEPAI_TOKEN="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["providers"]["deepai"]["apiKey"])' "$MODELS_FILE")"
@@ -146,6 +179,10 @@ os.chmod(sync_path, 0o600)
 PY
 chmod 600 "$OPENCODE_CONFIG"
 
-# OpenCode のバックグラウンドサービスは起動済みの設定を保持するため、
+if [ "$PREPARE_ONLY" -eq 1 ]; then
+  echo "opencode-deepai-launch: 設定を更新しました。素の opencode がそのまま使えます。"
+  exit 0
+fi
+
 # --standalone で自分だけのサーバーを起動し、この生成設定を確実に反映する。
 exec opencode --standalone "$@"

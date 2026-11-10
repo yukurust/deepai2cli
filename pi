@@ -1,0 +1,115 @@
+#!/bin/sh
+# pi: DeepAI Code 内蔵 Pi coding agent を独立セッションで起動するランチャー。
+#
+# - 引数は pi CLI にそのまま渡します: pi [options] [--] [@files...] [messages...]
+# - 既定(呼び出し側の指定があればそちらを優先):
+#     モデル deepai/mimo-2.6-pro(DEEPAI_MODEL で変更可)
+#     実行ごとに独立した新規セッション(--session-id で既存セッションを継続可)
+#     ツール read,bash,edit,write,grep,find,ls
+# - DeepAI Code のログイン状態(保存済みアカウント)をそのまま利用します。
+# - Orca のエージェント起動(`orca agent launch --agent pi`)は PATH 上の `pi`
+#   を探して起動する(detectCmd: pi、プロンプトは argv で渡る)ので、
+#   このスクリプトは `pi` という名前でインストールしてください。
+set -eu
+
+APP_HOME="${T3CODE_HOME:-$HOME/.deepai-code}"
+HELPER='/Applications/DeepAI Code.app/Contents/Frameworks/DeepAI Code Helper.app/Contents/MacOS/DeepAI Code Helper'
+PI_CLI='/Applications/DeepAI Code.app/Contents/Resources/app.asar/node_modules/@earendil-works/pi-coding-agent/dist/bundle/cli.js'
+PI_CONFIG="${PI_CODING_AGENT_DIR:-$APP_HOME/userdata/deepai/pi/deepai}"
+PI_EXTENSION="$APP_HOME/caches/pi-deepai-extension.ts"
+
+main() {
+  # app.asar の内部はシェルから見えないため、ヘルパーの存在だけを確認する。
+  if [ ! -x "$HELPER" ]; then
+    echo 'pi: DeepAI Code アプリが見つかりません。アプリを一度起動して配置を確認してください。' >&2
+    exit 127
+  fi
+
+  # ユーティリティ系の呼び出し(--list-models 等)では既定値を注入せず、待機もしない。
+  for arg in "$@"; do
+    case "$arg" in
+      --list-models|--help|-h|--version|-v)
+        exec "$HELPER" "$PI_CLI" "$@"
+        ;;
+    esac
+  done
+
+  # ローカルプロキシが未起動なら DeepAI Code をバックグラウンド起動して待つ。
+  PROXY_URL="$(python3 -c 'import json, sys
+try:
+    print(json.load(open(sys.argv[1]))["providers"]["deepai"].get("baseUrl", ""))
+except Exception:
+    pass' "$PI_CONFIG/models.json" 2>/dev/null || true)"
+  if [ -n "$PROXY_URL" ] && ! curl -s -o /dev/null --max-time 2 "$PROXY_URL/"; then
+    DEEPAI_UP="$SCRIPT_DIR/deepai-up"
+    [ -x "$DEEPAI_UP" ] || DEEPAI_UP="$(command -v deepai-up || true)"
+    if [ -z "$DEEPAI_UP" ]; then
+      echo "pi: ローカルプロキシ($PROXY_URL)に接続できず、deepai-up も見つかりません。" >&2
+      echo 'pi: DeepAI Code アプリを起動してください。' >&2
+      exit 1
+    fi
+    "$DEEPAI_UP" >&2 || exit 1
+  fi
+
+  # 呼び出し側の指定を確認(無いときだけ既定を補う)。
+  HAS_MODEL=0
+  HAS_SESSION=0
+  HAS_TOOLS=0
+  SESSION_VALUE=''
+  prev=''
+  for arg in "$@"; do
+    case "$prev" in
+      --model) HAS_MODEL=1 ;;
+      --session-id|--session)
+        HAS_SESSION=1
+        SESSION_VALUE="$arg"
+        ;;
+    esac
+    case "$arg" in
+      --model|--model=*|-m) HAS_MODEL=1 ;;
+      --session-id|--session-id=*|--session|--session=*|--continue|--resume|--fork|--no-session)
+        HAS_SESSION=1
+        ;;
+      --tools|--tools=*|-t|--no-tools|-nt|--no-builtin-tools|-nbt) HAS_TOOLS=1 ;;
+    esac
+    prev="$arg"
+  done
+
+  if [ "$HAS_SESSION" -eq 0 ]; then
+    SESSION_VALUE="$(uuidgen | tr '[:upper:]' '[:lower:]')"
+    set -- --session-id "$SESSION_VALUE" "$@"
+  fi
+
+  if [ "$HAS_MODEL" -eq 0 ]; then
+    MODEL="${DEEPAI_MODEL:-mimo-2.6-pro}"
+    case "$MODEL" in deepai/*) MODEL="${MODEL#deepai/}" ;; esac
+    set -- --model "deepai/$MODEL" "$@"
+  fi
+
+  if [ "$HAS_TOOLS" -eq 0 ]; then
+    set -- --tools read,bash,edit,write,grep,find,ls "$@"
+  fi
+
+  if [ -f "$PI_EXTENSION" ]; then
+    set -- --extension "$PI_EXTENSION" "$@"
+  fi
+
+  export ELECTRON_RUN_AS_NODE=1
+  export PI_CODING_AGENT=true
+  export PI_CODING_AGENT_DIR="$PI_CONFIG"
+  export T3_DEEPAI_THREAD_ID="${T3_DEEPAI_THREAD_ID:-$SESSION_VALUE}"
+  exec "$HELPER" "$PI_CLI" "$@"
+}
+
+# シンボリックリンクを解決して自分のディレクトリを求める(deepai-up 探索用)。
+SELF=$0
+while [ -L "$SELF" ]; do
+  TARGET=$(readlink "$SELF")
+  case "$TARGET" in
+    /*) SELF="$TARGET" ;;
+    *) SELF="$(dirname "$SELF")/$TARGET" ;;
+  esac
+done
+SCRIPT_DIR=$(cd "$(dirname "$SELF")" && pwd)
+
+main "$@"

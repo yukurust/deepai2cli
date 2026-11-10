@@ -1,0 +1,27 @@
+#!/bin/sh
+# deepai-opencode: DeepAI の設定を最新化してから opencode を起動する。
+# pi の bash、Orca の自動化、ターミナルのどこからでも同じように実行できる。
+# 引数はすべて opencode に渡す(例: deepai-opencode / deepai-opencode run "…")。
+set -eu
+
+SELF=$0
+while [ -L "$SELF" ]; do
+  TARGET=$(readlink "$SELF")
+  case "$TARGET" in
+    /*) SELF="$TARGET" ;;
+    *) SELF="$(dirname "$SELF")/$TARGET" ;;
+  esac
+done
+SCRIPT_DIR=$(cd "$(dirname "$SELF")" && pwd)
+
+LAUNCH="$SCRIPT_DIR/opencode-deepai-launch"
+if [ ! -x "$LAUNCH" ]; then
+  LAUNCH="$(command -v opencode-deepai-launch || true)"
+fi
+if [ -z "$LAUNCH" ]; then
+  echo 'deepai-opencode: opencode-deepai-launch が見つかりません。README のセットアップを実行してください。' >&2
+  exit 1
+fi
+
+"$LAUNCH" --prepare >&2
+exec opencode "$@"
