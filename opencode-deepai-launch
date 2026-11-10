@@ -1,6 +1,6 @@
 #!/bin/sh
 # Launch OpenCode with DeepAI Code's saved account and models.
-# DeepAI のモデルが既定となり、ローカルモデル(oMLX など)は実行されません。
+# DeepAI のモデルが既定となります。
 set -eu
 
 DEEPAI_HOME="${T3CODE_HOME:-$HOME/.deepai-code}"
