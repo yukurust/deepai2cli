@@ -1,0 +1,103 @@
+#!/bin/sh
+# DeepAI Code CLI (deepai-pi): DeepAI Code アプリ内蔵の Pi coding agent を実行する。
+# DeepAI Code のログイン状態・モデル設定(保存済みのアカウント)をそのまま利用します。
+#
+# 使い方:
+#   deepai-pi                        対話セッションを開始
+#   deepai-pi "調査して"              最初の指示を付けて開始
+#   deepai-pi --print "調査して"      非対話で 1 回実行し、結果を標準出力へ
+#
+# オプション:
+#   -p, --print           非対話モード。プロンプトを処理して終了する
+#   -m, --model <id>      DeepAI のモデル ID (既定: mimo-2.6-pro)
+#       --session-id <id> セッション ID を指定する (既定: 実行ごとに新規発行)
+#   -h, --help            このヘルプを表示
+set -eu
+
+APP_HOME="${T3CODE_HOME:-$HOME/.deepai-code}"
+HELPER='/Applications/DeepAI Code.app/Contents/Frameworks/DeepAI Code Helper.app/Contents/MacOS/DeepAI Code Helper'
+PI_CLI='/Applications/DeepAI Code.app/Contents/Resources/app.asar/node_modules/@earendil-works/pi-coding-agent/dist/bundle/cli.js'
+PI_CONFIG="${PI_CODING_AGENT_DIR:-$APP_HOME/userdata/deepai/pi/deepai}"
+PI_EXTENSION="$APP_HOME/caches/pi-deepai-extension.ts"
+
+usage() {
+  sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//'
+}
+
+MODEL='mimo-2.6-pro'
+SESSION_ID=''
+PRINT_MODE=0
+PROMPT=''
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    -p|--print)
+      PRINT_MODE=1
+      shift
+      ;;
+    -m|--model)
+      [ $# -ge 2 ] || { echo 'deepai-pi: --model にはモデル ID が必要です。' >&2; exit 2; }
+      MODEL="$2"
+      shift 2
+      ;;
+    --session-id)
+      [ $# -ge 2 ] || { echo 'deepai-pi: --session-id には ID が必要です。' >&2; exit 2; }
+      SESSION_ID="$2"
+      shift 2
+      ;;
+    --)
+      shift
+      break
+      ;;
+    -*)
+      echo "deepai-pi: 不明なオプションです: $1" >&2
+      exit 2
+      ;;
+    *)
+      break
+      ;;
+  esac
+done
+
+if [ $# -gt 0 ]; then
+  PROMPT="$*"
+fi
+
+case "$MODEL" in
+  deepai/*) MODEL="${MODEL#deepai/}" ;;
+esac
+
+# app.asar の内部はシェルから見えないため、ヘルパーの存在だけを確認する。
+if [ ! -x "$HELPER" ]; then
+  echo 'deepai-pi: DeepAI Code アプリが見つかりません。アプリを一度起動して配置を確認してください。' >&2
+  exit 127
+fi
+if [ ! -r "$PI_CONFIG/models.json" ]; then
+  echo "deepai-pi: DeepAI Code のモデル設定が見つかりません: $PI_CONFIG/models.json" >&2
+  exit 1
+fi
+
+if [ -z "$SESSION_ID" ]; then
+  SESSION_ID="$(uuidgen | tr '[:upper:]' '[:lower:]')"
+fi
+
+set -- --model "deepai/$MODEL" --session-id "$SESSION_ID" --tools read,bash,edit,write,grep,find,ls
+if [ -f "$PI_EXTENSION" ]; then
+  set -- --extension "$PI_EXTENSION" "$@"
+fi
+if [ "$PRINT_MODE" -eq 1 ]; then
+  set -- --print "$@"
+fi
+if [ -n "$PROMPT" ]; then
+  set -- "$@" -- "$PROMPT"
+fi
+
+export ELECTRON_RUN_AS_NODE=1
+export PI_CODING_AGENT=true
+export PI_CODING_AGENT_DIR="$PI_CONFIG"
+export T3_DEEPAI_THREAD_ID="$SESSION_ID"
+exec "$HELPER" "$PI_CLI" "$@"

@@ -1,0 +1,151 @@
+#!/bin/sh
+# Launch OpenCode with DeepAI Code's saved account and models.
+# DeepAI のモデルが既定となり、ローカルモデル(oMLX など)は実行されません。
+set -eu
+
+DEEPAI_HOME="${T3CODE_HOME:-$HOME/.deepai-code}"
+PI_CONFIG="${PI_CODING_AGENT_DIR:-$DEEPAI_HOME/userdata/deepai/pi/deepai}"
+MODELS_FILE="$PI_CONFIG/models.json"
+
+if [ ! -r "$MODELS_FILE" ]; then
+  echo "DeepAI Code model configuration was not found: $MODELS_FILE" >&2
+  exit 1
+fi
+if ! command -v opencode >/dev/null 2>&1; then
+  echo "OpenCode CLI is required. Install it and retry." >&2
+  exit 1
+fi
+
+# 認証情報は設定ファイル(権限 600)でのみ保持し、argv には出さない。
+T3_DEEPAI_TOKEN="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["providers"]["deepai"]["apiKey"])' "$MODELS_FILE")"
+T3_DEEPAI_URL="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["providers"]["deepai"]["baseUrl"])' "$MODELS_FILE")"
+export T3_DEEPAI_TOKEN T3_DEEPAI_URL
+if [ -z "$T3_DEEPAI_TOKEN" ] || [ -z "$T3_DEEPAI_URL" ]; then
+  echo "DeepAI Code login or provider configuration is missing." >&2
+  exit 1
+fi
+
+# 引数はそのまま OpenCode に渡す。生成した設定は DeepAI の全モデルを登録し、
+# 既定モデルを DeepAI 側に固定する。
+export OPENCODE_CONFIG="$DEEPAI_HOME/opencode-deepai.generated.json"
+python3 - "$MODELS_FILE" "$OPENCODE_CONFIG" "$HOME/.config/opencode/opencode.jsonc" "$HOME/.config/opencode/opencode.json" <<'PY'
+import json, os, re, sys
+source, target, *user_configs = sys.argv[1:]
+
+def parse_jsonc(text):
+    # Remove JSONC comments while preserving quoted strings and their escapes.
+    out, i, quoted, escaped = [], 0, False, False
+    while i < len(text):
+        ch = text[i]
+        nxt = text[i + 1] if i + 1 < len(text) else ''
+        if quoted:
+            out.append(ch)
+            if escaped:
+                escaped = False
+            elif ch == '\\':
+                escaped = True
+            elif ch == '"':
+                quoted = False
+            i += 1
+        elif ch == '"':
+            quoted = True
+            out.append(ch)
+            i += 1
+        elif ch == '/' and nxt == '/':
+            i += 2
+            while i < len(text) and text[i] not in '\r\n':
+                i += 1
+        elif ch == '/' and nxt == '*':
+            i += 2
+            while i + 1 < len(text) and text[i:i + 2] != '*/':
+                i += 1
+            i = min(len(text), i + 2)
+        else:
+            out.append(ch)
+            i += 1
+    return json.loads(re.sub(r',\s*([}\]])', r'\1', ''.join(out)))
+
+config = {}
+for path in user_configs:
+    if os.path.isfile(path):
+        with open(path, encoding='utf-8') as f:
+            try:
+                user_config = parse_jsonc(f.read())
+            except Exception as error:
+                raise SystemExit(f'Cannot read existing OpenCode config {path}: {error}')
+        for key, value in user_config.items():
+            if key == 'providers' and isinstance(value, dict):
+                config.setdefault('providers', {}).update(value)
+            else:
+                config[key] = value
+        break
+
+data = json.load(open(source, encoding='utf-8'))
+models = data.get('providers', {}).get('deepai', {}).get('models', [])
+if not models:
+    raise SystemExit('No DeepAI models are configured in DeepAI Code.')
+
+# DeepAI Code 本体の表示名・提供 API に合わせるための規則。
+def display_name(model):
+    if model['id'] == 'deepseek-v4.1-flash' and model.get('name') == 'DeepSeek V4.1 Flash':
+        return 'DeepSeek V4.1 Flash 1017'
+    return model.get('name', model['id'])
+
+config_models = {}
+for model in models:
+    if model['id'] == 'gpt-oss-120b':
+        continue
+    entry = {
+        'name': display_name(model),
+        'modelID': model['id'],
+        'limit': {
+            'context': model.get('contextWindow', 65536),
+            'output': model.get('maxTokens', 8192),
+        },
+        'capabilities': {
+            'tools': True,
+            'input': model.get('input', ['text']),
+            'output': ['text'],
+        },
+    }
+    if model.get('reasoning'):
+        entry['variants'] = [
+            {'id': 'low', 'settings': {'reasoningEffort': 'low'}},
+            {'id': 'medium', 'settings': {'reasoningEffort': 'medium'}},
+            {'id': 'high', 'settings': {'reasoningEffort': 'high'}},
+        ]
+    # DeepAI がモデル単位で Responses API を指定する場合の上書き
+    if model.get('api') == 'openai-responses':
+        entry['package'] = 'aisdk:@ai-sdk/openai-compatible/responses'
+    config_models[model['id']] = entry
+
+preferred = 'mimo-2.6-pro'
+default_model = preferred if preferred in config_models else next(iter(config_models))
+config['$schema'] = 'https://opencode.ai/config.json'
+config['model'] = f'deepai/{default_model}'
+config.setdefault('providers', {})['deepai'] = {
+    'name': 'DeepAI Code',
+    'package': 'aisdk:@ai-sdk/openai-compatible',
+    'settings': {'baseURL': os.environ['T3_DEEPAI_URL'], 'apiKey': os.environ['T3_DEEPAI_TOKEN']},
+    'models': config_models,
+}
+with open(target, 'w', encoding='utf-8') as f:
+    json.dump(config, f, ensure_ascii=False, indent=2)
+    f.write('\n')
+
+# モデル一覧と認証情報の追従: DeepAI Code の最新設定で、
+# opencode のグローバル設定(~/.config/opencode)の DeepAI プロバイダも更新する。
+# model(既定モデル)は触れない。
+sync_path = next((p for p in user_configs if os.path.isfile(p)), user_configs[0])
+user_config = parse_jsonc(open(sync_path, encoding='utf-8').read()) if os.path.isfile(sync_path) else {}
+user_config.setdefault('providers', {})['deepai'] = config['providers']['deepai']
+with open(sync_path, 'w', encoding='utf-8') as f:
+    json.dump(user_config, f, ensure_ascii=False, indent=2)
+    f.write('\n')
+os.chmod(sync_path, 0o600)
+PY
+chmod 600 "$OPENCODE_CONFIG"
+
+# OpenCode のバックグラウンドサービスは起動済みの設定を保持するため、
+# --standalone で自分だけのサーバーを起動し、この生成設定を確実に反映する。
+exec opencode --standalone "$@"
