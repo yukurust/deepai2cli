@@ -171,6 +171,10 @@ with open(target, 'w', encoding='utf-8') as f:
 # model(既定モデル)は触れない。
 sync_path = next((p for p in user_configs if os.path.isfile(p)), user_configs[0])
 user_config = parse_jsonc(open(sync_path, encoding='utf-8').read()) if os.path.isfile(sync_path) else {}
+# 初回の変更前に 1 度だけバックアップを取る(JSONC のコメントは再現できないため)。
+if os.path.isfile(sync_path) and not os.path.isfile(sync_path + '.bak'):
+    import shutil
+    shutil.copy2(sync_path, sync_path + '.bak')
 user_config.setdefault('providers', {})['deepai'] = config['providers']['deepai']
 with open(sync_path, 'w', encoding='utf-8') as f:
     json.dump(user_config, f, ensure_ascii=False, indent=2)

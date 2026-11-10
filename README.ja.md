@@ -6,14 +6,23 @@
 
 DeepAI Code のログイン状態・モデル設定(保存済みアカウント)をそのまま利用して、ターミナルから DeepAI のモデルと Pi coding agent を使うためのツール一式です。APIキーの再入力は不要です。
 
-## できること
+## インストール
 
-- **ターミナルから DeepAI Code 内蔵の Pi coding agent を実行**(`deepai-pi`、対話 / 非対話)
-- **opencode のモデルとして DeepAI のモデルを選択して実行**(モデル一覧は DeepAI Code の設定から自動生成)
-- **DeepAI Code をバックグラウンド(非表示)で起動**(`deepai-up`、未起動なら待機付きで自動起動)
-- **opencode の設定だけを更新**(`opencode-deepai-launch --prepare`、以降は素の `opencode` が使える)
-- opencode の `/deepai` コマンドで DeepAI CLI(Pi)を 1 回実行
-- 会話ごとに独立した Pi セッション ID を作成
+```sh
+curl -fsSL https://raw.githubusercontent.com/yukurust/deepai2cli/main/install.sh | sh
+```
+
+これだけで完了です。インストーラは必要なコマンドファイルだけを `~/.local/bin`(と `/deepai` コマンドを `~/.config/opencode/command`)にダウンロードします。**リポジトリの取得も git も不要**です。派生パターン:
+
+```sh
+URL=https://raw.githubusercontent.com/yukurust/deepai2cli/main/install.sh
+curl -fsSL "$URL" | sh                       # インストール
+curl -fsSL "$URL" | sh -s -- --dry-run       # 何をするかだけ表示
+curl -fsSL "$URL" | sh -s -- --uninstall     # 配置したファイルを削除
+curl -fsSL "$URL" -o install.sh && sh install.sh   # 中身を確認してから実行
+```
+
+更新は curl コマンドの再実行です。実行内容を固定したい場合は URL の `main` をタグ/コミットに置き換えてください。インストーラは前提チェックを実施し、**DeepAI Code アプリが未導入の場合はその旨を明確に案内します**(`pi` と DeepAI モデルの利用に必要。導入・サインイン後に `opencode-deepai-launch --prepare` を実行してください)。既に別の `pi` が PATH にある場合はその `pi` を残したまま pi 系(`pi` / `deepai-pi` / `/deepai` コマンド)だけをスキップするので、**opencode のみの利用では既存の pi と衝突せずにインストールできます**。`~/.local/bin` を PATH に含めておいてください(`export PATH="$HOME/.local/bin:$PATH"`)。
 
 ## 使い方
 
@@ -109,7 +118,7 @@ opencode-deepai-launch --prepare   # 設定だけ更新して終了(以降は素
 opencode-deepai-launch             # 設定を更新して opencode を起動
 ```
 
-DeepAI Code のアカウントやモデル設定(`models.json`)を更新したとき、あるいは **DeepAI Code を再起動したときは、このコマンドを一度実行**すると `~/.config/opencode/opencode.jsonc` の DeepAI 設定(モデル一覧・認証情報)に反映されます。`--prepare` は DeepAI Code が未起動ならバックグラウンド起動まで行い、opencode は起動しません。**この後は素の `opencode` をいつでも直接起動できます**。
+DeepAI Code のアカウントやモデル設定(`models.json`)を更新したとき、あるいは **DeepAI Code を再起動したときは、このコマンドを一度実行**すると `~/.config/opencode/opencode.jsonc` の DeepAI 設定(モデル一覧・認証情報)に反映されます。`--prepare` は DeepAI Code が未起動ならバックグラウンド起動まで行い、opencode は起動しません。**この後は素の `opencode` をいつでも直接起動できます**。ファイル内の他の設定・他プロバイダ・既定モデルはそのまま残ります(JSONC のコメントは保持されません)。バックアップはツール導入前のファイル1枚を `opencode.jsonc.bak` として保存するだけで、上書きも増殖もしません。認証情報は `~/.config/opencode/opencode.jsonc`(権限 600)のみに保持されます。
 
 #### Orca の自動化と組み合わせる
 
@@ -125,25 +134,14 @@ opencode-deepai-launch --prepare && exec opencode "$@"   # 例: ラッパーの�
 2. `opencode-deepai-launch --prepare` で設定を再同期
 3. それでもダメなら `~/.deepai-code/userdata/deepai/pi/deepai/models.json` と `~/.config/opencode/opencode.jsonc` の `baseUrl` が一致しているか確認
 
-## インストール
+## できること
 
-```sh
-curl -fsSL https://raw.githubusercontent.com/yukurust/deepai2cli/main/install.sh | sh
-```
-
-これだけで完了です。インストーラは必要なコマンドファイルだけを `~/.local/bin`(と `/deepai` コマンドを `~/.config/opencode/command`)にダウンロードします。**リポジトリの取得も git も不要**です。派生パターン:
-
-```sh
-URL=https://raw.githubusercontent.com/yukurust/deepai2cli/main/install.sh
-curl -fsSL "$URL" | sh                       # インストール
-curl -fsSL "$URL" | sh -s -- --dry-run       # 何をするかだけ表示
-curl -fsSL "$URL" | sh -s -- --uninstall     # 配置したファイルを削除
-curl -fsSL "$URL" -o install.sh && sh install.sh   # 中身を確認してから実行
-```
-
-更新は curl コマンドの再実行です。実行内容を固定したい場合は URL の `main` をタグ/コミットに置き換えてください。インストーラは前提チェックを実施し、別名の `pi` が既に PATH にある場合は衝突を避けるため中止します。`~/.local/bin` を PATH に含めておいてください(`export PATH="$HOME/.local/bin:$PATH"`)。
-
-認証情報は `~/.config/opencode/opencode.jsonc` に保持し、ファイルの権限は 600 にしています。`opencode-deepai-launch` は DeepAI Code の設定からモデル一覧と認証を取り込み、既定モデルを `deepai/mimo-2.6-pro` にして起動します。
+- **ターミナルから DeepAI Code 内蔵の Pi coding agent を実行**(`deepai-pi`、対話 / 非対話)
+- **opencode のモデルとして DeepAI のモデルを選択して実行**(モデル一覧は DeepAI Code の設定から自動生成)
+- **DeepAI Code をバックグラウンド(非表示)で起動**(`deepai-up`、未起動なら待機付きで自動起動)
+- **opencode の設定だけを更新**(`opencode-deepai-launch --prepare`、以降は素の `opencode` が使える)
+- opencode の `/deepai` コマンドで DeepAI CLI(Pi)を 1 回実行
+- 会話ごとに独立した Pi セッション ID を作成
 
 ## 前提
 

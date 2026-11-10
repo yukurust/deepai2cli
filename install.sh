@@ -32,13 +32,14 @@
 #
 # 前提:
 #   - macOS / DeepAI Code アプリ(サインイン済み)/ [opencode](https://opencode.ai)
-#   - 既に別の `pi` コマンドが PATH にある場合は警告して停止する(名前衝突を避ける)
+#   - 既に別の `pi` コマンドがある場合は pi 系だけスキップして残りをインストールする
 set -eu
 
 BIN_DIR="$HOME/.local/bin"
 COMMAND_DIR="$HOME/.config/opencode/command"
 SCRIPTS="pi deepai-pi deepai-up deepai-opencode opencode-deepai-launch"
 URL_BASE="${DEEPAI2CLI_URL_BASE:-https://raw.githubusercontent.com/yukurust/deepai2cli/main}"
+DEEPAI_APP="${DEEPAI_APP:-/Applications/DeepAI Code.app}"
 
 usage() {
   cat <<'EOF'
@@ -102,7 +103,12 @@ fetch() {
     return
   fi
   tmp="$dest.tmp.$$"
-  curl -fsSL "$URL_BASE/$src" -o "$tmp"
+  if ! curl -fsSL "$URL_BASE/$src" -o "$tmp"; then
+    # 失敗時に一時ファイルを残さない。
+    rm -f "$tmp"
+    echo "install.sh: ダウンロードに失敗しました: $URL_BASE/$src" >&2
+    exit 1
+  fi
   mv "$tmp" "$dest"
   chmod "$mode" "$dest"
 }
@@ -122,8 +128,10 @@ if [ "$UNINSTALL" -eq 1 ]; then
 fi
 
 # --- 事前チェック(致命的でないものは警告に留める) ---
-if [ ! -d '/Applications/DeepAI Code.app' ]; then
-  echo 'install.sh: 警告: DeepAI Code アプリが見つかりません。`pi` とモデル利用には必要です。' >&2
+DEEPAI_MISSING=0
+if [ ! -d "$DEEPAI_APP" ]; then
+  DEEPAI_MISSING=1
+  echo "install.sh: 警告: DeepAI Code アプリが見つかりません: $DEEPAI_APP" >&2
 fi
 for cmd in python3 curl; do
   if ! command -v "$cmd" >/dev/null 2>&1; then
@@ -136,30 +144,35 @@ if ! command -v opencode >/dev/null 2>&1; then
 fi
 
 # `pi` の名前衝突チェック(Orca は detectCmd: pi で探すため、この名前が必須)。
+# 別の pi がある場合は pi 系(pi / deepai-pi / /deepai)だけをスキップして
+# 残り(opencode 系)をインストールする。opencode のみの利用では pi は不要。
+SKIP_PI=0
 EXISTING_PI="$(command -v pi || true)"
 if [ -n "$EXISTING_PI" ] && [ "$EXISTING_PI" != "$BIN_DIR/pi" ]; then
-  if [ "$DRY_RUN" -eq 1 ]; then
-    echo "install.sh: 警告: $EXISTING_PI に別の pi があります(本実行では中止します)。" >&2
-  else
-    echo "install.sh: $EXISTING_PI に別の pi があります。" >&2
-    echo 'install.sh: 衝突を避けるため中止します。既存の pi を外すか、PATH の順で ~/.local/bin を先にしてください。' >&2
-    exit 1
-  fi
+  SKIP_PI=1
+  echo "install.sh: 注意: $EXISTING_PI に別の pi があります。" >&2
+  echo 'install.sh: 既存の pi を優先し、pi 系(pi / deepai-pi / /deepai コマンド)はスキップします。' >&2
+  echo 'install.sh: pi 系も使う場合は、既存の pi を外すか PATH の順で ~/.local/bin を先にしてから再実行してください。' >&2
 fi
 
 # --- 配置 ---
 run mkdir -p "$BIN_DIR" "$COMMAND_DIR"
 for name in $SCRIPTS; do
+  case "$name" in
+    pi|deepai-pi) [ "$SKIP_PI" -eq 1 ] && continue ;;
+  esac
   if [ -n "$LOCAL_DIR" ]; then
     fetch "$LOCAL_DIR/$name" "$BIN_DIR/$name" 755
   else
     fetch "$name" "$BIN_DIR/$name" 755
   fi
 done
-if [ -n "$LOCAL_DIR" ]; then
-  fetch "$LOCAL_DIR/opencode/command/deepai.md" "$COMMAND_DIR/deepai.md" 644
-else
-  fetch "opencode/command/deepai.md" "$COMMAND_DIR/deepai.md" 644
+if [ "$SKIP_PI" -eq 0 ]; then
+  if [ -n "$LOCAL_DIR" ]; then
+    fetch "$LOCAL_DIR/opencode/command/deepai.md" "$COMMAND_DIR/deepai.md" 644
+  else
+    fetch "opencode/command/deepai.md" "$COMMAND_DIR/deepai.md" 644
+  fi
 fi
 
 # --- 終了案内 ---
@@ -174,5 +187,15 @@ esac
 echo 'install.sh: 完了。次のステップ:'
 echo '  deepai-up --status                 # DeepAI Code のプロキシ確認(未起動なら自動起動)'
 echo '  opencode-deepai-launch --prepare   # opencode の設定を生成 / 更新'
-echo '  pi                                 # pi を独立セッションで起動'
-echo '  orca agent launch --agent pi       # Orca から pi に接続'
+if [ "$SKIP_PI" -eq 1 ]; then
+  echo 'install.sh: (pi 系は既存の pi を優先してスキップしました)'
+else
+  echo '  pi                                 # pi を独立セッションで起動'
+  echo '  orca agent launch --agent pi       # Orca から pi に接続'
+fi
+if [ "$DEEPAI_MISSING" -eq 1 ]; then
+  echo ''
+  echo 'install.sh: ★ DeepAI Code アプリが未インストールです。'
+  echo 'install.sh:   pi / DeepAI モデルの利用には DeepAI Code アプリ(サインイン済み)が必要です。'
+  echo 'install.sh:   導入してサインイン後、opencode-deepai-launch --prepare を実行してください。'
+fi

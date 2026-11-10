@@ -6,14 +6,23 @@ English | [日本語](README.ja.md) | [中文](README.zh.md)
 
 Use DeepAI's models and the built-in **Pi coding agent** right from your terminal and [opencode](https://opencode.ai) — reusing your existing DeepAI Code login and saved account settings. **No API key re-entry required.**
 
-## What you get
+## Install
 
-- **Run DeepAI Code's built-in Pi coding agent from the terminal** (`deepai-pi`, interactive / one-shot)
-- **Use DeepAI models inside opencode** (the model list is generated automatically from DeepAI Code's settings)
-- **Start DeepAI Code in the background** (`deepai-up`; waits for the API proxy and auto-starts the app when needed)
-- **Refresh opencode's config without launching** (`opencode-deepai-launch --prepare`; plain `opencode` works afterwards)
-- A `/deepai` command in opencode to run the DeepAI CLI (Pi) once
-- A fresh, independent Pi session ID per conversation
+```sh
+curl -fsSL https://raw.githubusercontent.com/yukurust/deepai2cli/main/install.sh | sh
+```
+
+That is the whole install: the installer downloads just the command files into `~/.local/bin` (and the `/deepai` command into `~/.config/opencode/command`) — **no repository checkout, no git**. Variants:
+
+```sh
+URL=https://raw.githubusercontent.com/yukurust/deepai2cli/main/install.sh
+curl -fsSL "$URL" | sh                       # install
+curl -fsSL "$URL" | sh -s -- --dry-run       # show what it would do first
+curl -fsSL "$URL" | sh -s -- --uninstall     # remove the installed files
+curl -fsSL "$URL" -o install.sh && sh install.sh   # inspect the script before running
+```
+
+Re-running the curl command updates the files. To lock the version, replace `main` with a tag or commit in the URL. The installer checks the prerequisites and **tells you when the DeepAI Code app is missing** (it is required for `pi` and for DeepAI models — install it and sign in, then run `opencode-deepai-launch --prepare`). When a different `pi` is already on your `PATH`, it keeps that `pi` and skips the pi-side commands (`pi` / `deepai-pi` / `/deepai`) — so an **opencode-only setup installs cleanly alongside an existing pi**. Make sure `~/.local/bin` is on your `PATH` (`export PATH="$HOME/.local/bin:$PATH"`).
 
 ## Usage
 
@@ -109,7 +118,7 @@ opencode-deepai-launch --prepare   # refresh config only; plain `opencode` works
 opencode-deepai-launch             # refresh config and launch opencode
 ```
 
-When you update your DeepAI Code account or model settings (`models.json`), **or after restarting DeepAI Code**, run this once to sync the DeepAI section of `~/.config/opencode/opencode.jsonc` (model list and credentials). `--prepare` also starts DeepAI Code in the background when needed and exits without launching opencode — after it finishes, plain `opencode` can be used anytime.
+When you update your DeepAI Code account or model settings (`models.json`), **or after restarting DeepAI Code**, run this once to sync the DeepAI section of `~/.config/opencode/opencode.jsonc` (model list and credentials). `--prepare` also starts DeepAI Code in the background when needed and exits without launching opencode — after it finishes, plain `opencode` can be used anytime. Everything else in the file (your settings, other providers, default model) is left untouched; JSONC comments are not preserved, and the sync keeps exactly one backup of the pre-tool file as `opencode.jsonc.bak` (created once, never overwritten — no backup files accumulate). Credentials live only in `~/.config/opencode/opencode.jsonc` (permissions 600).
 
 #### Pairing with Orca automations
 
@@ -125,25 +134,14 @@ opencode-deepai-launch --prepare && exec opencode "$@"   # e.g. inside a wrapper
 2. `opencode-deepai-launch --prepare` — re-sync the config
 3. Still broken: check that `baseUrl` matches between `~/.deepai-code/userdata/deepai/pi/deepai/models.json` and `~/.config/opencode/opencode.jsonc`
 
-## Install
+## What you get
 
-```sh
-curl -fsSL https://raw.githubusercontent.com/yukurust/deepai2cli/main/install.sh | sh
-```
-
-That is the whole install: the installer downloads just the command files into `~/.local/bin` (and the `/deepai` command into `~/.config/opencode/command`) — **no repository checkout, no git**. Variants:
-
-```sh
-URL=https://raw.githubusercontent.com/yukurust/deepai2cli/main/install.sh
-curl -fsSL "$URL" | sh                       # install
-curl -fsSL "$URL" | sh -s -- --dry-run       # show what it would do first
-curl -fsSL "$URL" | sh -s -- --uninstall     # remove the installed files
-curl -fsSL "$URL" -o install.sh && sh install.sh   # inspect the script before running
-```
-
-Re-running the curl command updates the files. To lock the version, replace `main` with a tag or commit in the URL. The installer checks the prerequisites and refuses to run when a different `pi` command is already on your `PATH`. Make sure `~/.local/bin` is on your `PATH` (`export PATH="$HOME/.local/bin:$PATH"`).
-
-Credentials are stored only in `~/.config/opencode/opencode.jsonc`, with file permissions set to 600. `opencode-deepai-launch` imports the model list and credentials from DeepAI Code's settings, sets the default model to `deepai/mimo-2.6-pro`, and launches opencode.
+- **Run DeepAI Code's built-in Pi coding agent from the terminal** (`deepai-pi`, interactive / one-shot)
+- **Use DeepAI models inside opencode** (the model list is generated automatically from DeepAI Code's settings)
+- **Start DeepAI Code in the background** (`deepai-up`; waits for the API proxy and auto-starts the app when needed)
+- **Refresh opencode's config without launching** (`opencode-deepai-launch --prepare`; plain `opencode` works afterwards)
+- A `/deepai` command in opencode to run the DeepAI CLI (Pi) once
+- A fresh, independent Pi session ID per conversation
 
 ## Requirements
 

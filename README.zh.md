@@ -6,14 +6,23 @@
 
 直接在终端和 [opencode](https://opencode.ai) 中使用 DeepAI 的模型以及内置的 **Pi coding agent**——沿用你已有的 DeepAI Code 登录状态和已保存的账号设置。**无需重新输入 API key。**
 
-## 功能
+## 安装
 
-- **在终端运行 DeepAI Code 内置的 Pi coding agent**(`deepai-pi`,支持交互式 / 单次执行)
-- **在 opencode 中选择 DeepAI 的模型运行**(模型列表从 DeepAI Code 的设置自动生成)
-- **在后台启动 DeepAI Code**(`deepai-up`,等待 API 代理就绪,未启动时自动拉起)
-- **只更新 opencode 的配置**(`opencode-deepai-launch --prepare`,之后普通的 `opencode` 即可使用)
-- 通过 opencode 的 `/deepai` 命令执行一次 DeepAI CLI(Pi)
-- 每次会话都会生成独立的 Pi 会话 ID
+```sh
+curl -fsSL https://raw.githubusercontent.com/yukurust/deepai2cli/main/install.sh | sh
+```
+
+安装到此结束:安装脚本只把命令文件下载到 `~/.local/bin`(以及把 `/deepai` 命令下载到 `~/.config/opencode/command`)——**不需要克隆仓库,也不需要 git**。变体:
+
+```sh
+URL=https://raw.githubusercontent.com/yukurust/deepai2cli/main/install.sh
+curl -fsSL "$URL" | sh                       # 安装
+curl -fsSL "$URL" | sh -s -- --dry-run       # 只显示将要执行的操作
+curl -fsSL "$URL" | sh -s -- --uninstall     # 删除已安装的文件
+curl -fsSL "$URL" -o install.sh && sh install.sh   # 先检查脚本再执行
+```
+
+更新只需重新执行 curl 命令。想固定版本,把 URL 中的 `main` 换成 tag/commit。安装脚本会检查各项前提,**并在 DeepAI Code 应用缺失时明确告知**(pi 和 DeepAI 模型都需要它;请先安装并登录,再执行 `opencode-deepai-launch --prepare`)。如果 `PATH` 上已存在另一个 `pi`,会保留它并只跳过 pi 侧的命令(`pi` / `deepai-pi` / `/deepai`)——因此**只用 opencode 的场景可以与已有的 pi 共存安装**。请确保 `~/.local/bin` 在 `PATH` 中(`export PATH="$HOME/.local/bin:$PATH"`)。
 
 ## 用法
 
@@ -109,7 +118,7 @@ opencode-deepai-launch --prepare   # 只更新配置,之后可直接使用普通
 opencode-deepai-launch             # 更新配置并启动 opencode
 ```
 
-更新了 DeepAI Code 的账号或模型设置(`models.json`),或者**重启 DeepAI Code 之后**,运行一次该命令,即可把 `~/.config/opencode/opencode.jsonc` 中的 DeepAI 设置(模型列表和认证信息)同步为最新。`--prepare` 在 DeepAI Code 未启动时会先在后台启动它,然后退出而不启动 opencode——之后随时可以直接用普通的 `opencode`。
+更新了 DeepAI Code 的账号或模型设置(`models.json`),或者**重启 DeepAI Code 之后**,运行一次该命令,即可把 `~/.config/opencode/opencode.jsonc` 中的 DeepAI 设置(模型列表和认证信息)同步为最新。`--prepare` 在 DeepAI Code 未启动时会先在后台启动它,然后退出而不启动 opencode——之后随时可以直接用普通的 `opencode`。文件中的其他设置、其他提供商和默认模型都会保持不变(JSONC 注释不会保留)。备份只保留工具引入前的一份 `opencode.jsonc.bak`(只创建一次,不覆盖也不增多)。认证信息仅保存在 `~/.config/opencode/opencode.jsonc`(权限 600)。
 
 #### 与 Orca 自动化配合
 
@@ -125,25 +134,14 @@ opencode-deepai-launch --prepare && exec opencode "$@"   # 例:包装脚本的�
 2. `opencode-deepai-launch --prepare` —— 重新同步配置
 3. 仍然不行:检查 `~/.deepai-code/userdata/deepai/pi/deepai/models.json` 和 `~/.config/opencode/opencode.jsonc` 的 `baseUrl` 是否一致
 
-## 安装
+## 功能
 
-```sh
-curl -fsSL https://raw.githubusercontent.com/yukurust/deepai2cli/main/install.sh | sh
-```
-
-安装到此结束:安装脚本只把命令文件下载到 `~/.local/bin`(以及把 `/deepai` 命令下载到 `~/.config/opencode/command`)——**不需要克隆仓库,也不需要 git**。变体:
-
-```sh
-URL=https://raw.githubusercontent.com/yukurust/deepai2cli/main/install.sh
-curl -fsSL "$URL" | sh                       # 安装
-curl -fsSL "$URL" | sh -s -- --dry-run       # 只显示将要执行的操作
-curl -fsSL "$URL" | sh -s -- --uninstall     # 删除已安装的文件
-curl -fsSL "$URL" -o install.sh && sh install.sh   # 先检查脚本再执行
-```
-
-更新只需重新执行 curl 命令。想固定版本,把 URL 中的 `main` 换成 tag/commit。安装脚本会检查各项前提;如果 `PATH` 上已存在另一个 `pi` 命令,会为避免冲突而中止。请确保 `~/.local/bin` 在 `PATH` 中(`export PATH="$HOME/.local/bin:$PATH"`)。
-
-认证信息仅保存在 `~/.config/opencode/opencode.jsonc` 中,文件权限设为 600。`opencode-deepai-launch` 会从 DeepAI Code 的设置中导入模型列表和认证信息,将默认模型设为 `deepai/mimo-2.6-pro` 并启动 opencode。
+- **在终端运行 DeepAI Code 内置的 Pi coding agent**(`deepai-pi`,支持交互式 / 单次执行)
+- **在 opencode 中选择 DeepAI 的模型运行**(模型列表从 DeepAI Code 的设置自动生成)
+- **在后台启动 DeepAI Code**(`deepai-up`,等待 API 代理就绪,未启动时自动拉起)
+- **只更新 opencode 的配置**(`opencode-deepai-launch --prepare`,之后普通的 `opencode` 即可使用)
+- 通过 opencode 的 `/deepai` 命令执行一次 DeepAI CLI(Pi)
+- 每次会话都会生成独立的 Pi 会话 ID
 
 ## 前提条件
 
